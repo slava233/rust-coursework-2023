@@ -1,24 +1,115 @@
 use std::env;
 use std::fs;
+use std::io::Write;
+use std::path::{Path, PathBuf};
+
+#[derive(Debug, PartialEq, Eq, Ord, PartialOrd)]
+struct Entry {
+    path: PathBuf,
+    is_directory: bool,
+}
+
+fn list_files(path: &Path, find_file: Option<&str>, sort: bool) -> Vec<Entry> {
+    let mut entries: Vec<Entry> = Vec::new();
+
+    if let Ok(read_dir) = fs::read_dir(path) {
+        for entry in read_dir.flatten() {
+            let entry_path = entry.path();
+            let is_directory = entry.file_type().map(|t| t.is_dir()).unwrap_or(false);
+
+            if is_directory || entry_path.is_file() {
+                entries.push(Entry {
+                    path: entry_path.clone(),
+                    is_directory,
+                });
+            }
+
+            if is_directory {
+                let sub_entries = list_files(&entry_path, find_file, sort);
+                entries.extend(sub_entries);
+            }
+        }
+    }
+
+    if let Some(find_file_name) = find_file {
+        entries = entries
+            .into_iter()
+            .filter(|entry| entry.path.to_string_lossy().contains(find_file_name))
+            .collect();
+    }
+
+    if sort {
+        entries.sort();
+    }
+
+    entries
+}
 
 fn main() {
     let args: Vec<String> = env::args().collect();
-    if args.len() != 2 {
-        eprintln!("Usage: cargo run -- <path>");
+    if args.len() < 2 {
+        eprintln!("Usage: cargo run -- <path> [--find <file_name>] [--sort] [-f <output_file>]");
         std::process::exit(1);
     }
 
-    let path = &args[1];
-    if let Ok(entries) = fs::read_dir(path) {
-        for entry in entries {
-            if let Ok(entry) = entry {
-                if entry.file_type().map(|f| f.is_file()).unwrap_or(false) {
-                    let file_name = entry.file_name();
-                    println!("{}", file_name.to_string_lossy());
+    let path = Path::new(&args[1]);
+
+    let mut find_file: Option<&str> = None;
+    let mut sort: bool = false;
+    let mut output_file: Option<&str> = None;
+
+    let mut i = 2;
+    while i < args.len() {
+        match args[i].as_str() {
+            "--find" => {
+                if i + 1 < args.len() {
+                    find_file = Some(&args[i + 1]);
+                    i += 2;
+                } else {
+                    eprintln!("Error: --find option requires a file name");
+                    std::process::exit(1);
                 }
+            }
+            "--sort" => {
+                sort = true;
+                i += 1;
+            }
+            "-f" => {
+                if i + 1 < args.len() {
+                    output_file = Some(&args[i + 1]);
+                    i += 2;
+                } else {
+                    eprintln!("Error: -f option requires a file name");
+                    std::process::exit(1);
+                }
+            }
+            _ => {
+                eprintln!("Error: Unknown option {}", args[i]);
+                std::process::exit(1);
+            }
+        }
+    }
+
+    let entries = list_files(path, find_file, sort);
+
+    if let Some(output_file_name) = output_file {
+        let mut file = match fs::File::create(output_file_name) {
+            Ok(file) => file,
+            Err(e) => {
+                eprintln!("Error creating file {}: {}", output_file_name, e);
+                std::process::exit(1);
+            }
+        };
+
+        for entry in entries {
+            if let Err(e) = writeln!(file, "{}", entry.path.display()) {
+                eprintln!("Error writing to file: {}", e);
+                std::process::exit(1);
             }
         }
     } else {
-        eprintln!("Error listing directory contents.");
+        for entry in entries {
+            println!("{}", entry.path.display());
+        }
     }
 }
