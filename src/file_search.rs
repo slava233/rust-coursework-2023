@@ -35,31 +35,23 @@ pub fn list_files(path: &Path, find_file: Option<&str>, search_string: Option<&s
     }
 
     if let Some(find_file_name) = find_file {
-        occurrences = occurrences
-            .into_iter()
-            .filter(|occurrence| {
-                match occurrence {
-                    Occurrence::File(path) | Occurrence::TextFile(path) => {
-                        path.to_string_lossy().contains(find_file_name)
-                    }
-                    _ => false,
+        occurrences.retain(|occurrence| {
+            match occurrence {
+                Occurrence::File(path) | Occurrence::TextFile(path) => {
+                    path.to_string_lossy().contains(find_file_name)
                 }
-            })
-            .collect();
+                _ => false,
+            }
+        });
     }
 
     if let Some(search_string) = search_string {
-        occurrences = occurrences
-            .into_iter()
-            .filter(|occurrence| {
-                match occurrence {
-                    Occurrence::TextFile(path) => {
-                        search_in_text_file(&path, search_string)
-                    }
-                    _ => false,
-                }
-            })
-            .collect();
+        occurrences.retain(|occurrence| {
+            match occurrence {
+                Occurrence::TextFile(path) => search_in_text_file(&path, search_string),
+                _ => false,
+            }
+        });
     }
 
     if sort {
