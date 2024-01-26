@@ -60,3 +60,36 @@ pub fn list_files(path: &Path, find_file: Option<&str>, search_string: Option<&s
 
     occurrences
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs::{self, File};
+    use std::io::Write;
+
+    #[test]
+    fn test_list_files() {
+        let dir = "test_dir";
+        fs::create_dir(dir).expect("Failed to create directory");
+
+        let file1_path = format!("{}/file1.txt", dir);
+        let file2_path = format!("{}/file2.rs", dir);
+        let sub_dir_path = format!("{}/sub_dir", dir);
+
+        fs::create_dir(&sub_dir_path).expect("Failed to create sub-directory");
+
+        let mut file1 = File::create(&file1_path).expect("Failed to create file1");
+        file1.write_all(b"Test content in file1.txt").expect("Failed to write to file1");
+
+        let mut file2 = File::create(&file2_path).expect("Failed to create file2");
+        file2.write_all(b"Test content in file2.rs").expect("Failed to write to file2");
+
+        let path = Path::new(dir);
+        let occurrences = list_files(&path, None, Some("Test"), false);
+
+        assert_eq!(occurrences.len(), 2);
+
+        fs::remove_dir_all(dir).expect("Failed to remove directory");
+    }
+}
+
